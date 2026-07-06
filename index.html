@@ -222,30 +222,6 @@
 
   </div>
 
-  <!-- Админ панель: нэвтрэх эсэхээс үл хамааран үргэлж хандах боломжтой,
-       учир нь анхны хэрэглэгчийг бүртгэхэд нэвтэрсэн байх шаардлагагүй. -->
-  <details class="advanced">
-    <summary>Админ панель (зөвхөн эрх бүхий хүнд)</summary>
-    <div class="card">
-      <label for="adminKeyInput">Admin key</label>
-      <input type="password" id="adminKeyInput" placeholder="admin key">
-      <div style="height:12px;"></div>
-      <div class="row">
-        <div>
-          <label for="newUsername">Шинэ ажилтны нэвтрэх нэр</label>
-          <input type="text" id="newUsername" placeholder="нэвтрэх нэр">
-        </div>
-        <div>
-          <label for="newPassword">Шинэ ажилтны нууц үг</label>
-          <input type="password" id="newPassword" placeholder="нууц үг (6+ тэмдэгт)">
-        </div>
-      </div>
-      <button class="small" id="createUserBtn">Ажилтан нэмэх</button>
-      <button class="small secondary" id="listUsersBtn">Ажилтнуудыг жагсаах</button>
-      <div id="adminStatus"></div>
-    </div>
-  </details>
-
 </div>
 
 <script>
@@ -506,74 +482,6 @@
     a.download = 'khural_temdeglel_zohison.txt';
     a.click();
     URL.revokeObjectURL(url);
-  });
-
-  // ---------- Admin panel ----------
-  const adminKeyInput = document.getElementById('adminKeyInput');
-  const newUsername = document.getElementById('newUsername');
-  const newPassword = document.getElementById('newPassword');
-  const createUserBtn = document.getElementById('createUserBtn');
-  const listUsersBtn = document.getElementById('listUsersBtn');
-  const adminStatus = document.getElementById('adminStatus');
-
-  createUserBtn.addEventListener('click', async () => {
-    const adminKey = adminKeyInput.value.trim();
-    const username = newUsername.value.trim();
-    const password = newPassword.value;
-    if (!adminKey || !username || !password) {
-      adminStatus.textContent = 'Admin key, нэвтрэх нэр, нууц үг бүгдийг оруулна уу.';
-      adminStatus.className = 'warn';
-      return;
-    }
-    createUserBtn.disabled = true;
-    adminStatus.textContent = 'Нэмж байна...';
-    adminStatus.className = '';
-    try {
-      const resp = await fetch(`${WORKER_URL}/api/admin/create-user`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ username, password }),
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Ажилтан нэмэхэд алдаа гарлаа');
-      adminStatus.textContent = `"${data.username}" нэртэй ажилтан амжилттай нэмэгдлээ.`;
-      adminStatus.className = 'ok';
-      newUsername.value = '';
-      newPassword.value = '';
-    } catch (err) {
-      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
-      adminStatus.className = 'warn';
-    } finally {
-      createUserBtn.disabled = false;
-    }
-  });
-
-  listUsersBtn.addEventListener('click', async () => {
-    const adminKey = adminKeyInput.value.trim();
-    if (!adminKey) {
-      adminStatus.textContent = 'Admin key оруулна уу.';
-      adminStatus.className = 'warn';
-      return;
-    }
-    listUsersBtn.disabled = true;
-    adminStatus.textContent = 'Уншиж байна...';
-    adminStatus.className = '';
-    try {
-      const resp = await fetch(`${WORKER_URL}/api/admin/list-users`, {
-        headers: { 'x-admin-key': adminKey },
-      });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Уншихад алдаа гарлаа');
-      adminStatus.textContent = data.users.length
-        ? 'Ажилтнууд: ' + data.users.join(', ')
-        : 'Одоогоор ажилтан бүртгэгдээгүй байна.';
-      adminStatus.className = 'ok';
-    } catch (err) {
-      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
-      adminStatus.className = 'warn';
-    } finally {
-      listUsersBtn.disabled = false;
-    }
   });
 </script>
 </body>
