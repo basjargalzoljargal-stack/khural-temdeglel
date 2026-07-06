@@ -51,7 +51,7 @@
     font-size: 14px;
     margin-bottom: 8px;
   }
-  select, input[type="file"], input[type="password"] {
+  select, input[type="file"], input[type="password"], input[type="text"] {
     width: 100%;
     padding: 10px;
     border-radius: 8px;
@@ -83,14 +83,19 @@
     color: var(--text);
   }
   button.secondary:hover { background: #e0e0e0; }
-  #status, #notesStatus {
+  button.small {
+    padding: 8px 14px;
+    font-size: 13px;
+    margin-top: 0;
+  }
+  #status, #notesStatus, #loginStatus, #adminStatus {
     margin-top: 14px;
     font-size: 14px;
     color: var(--muted);
     white-space: pre-line;
   }
-  #status.ok, #notesStatus.ok { color: var(--ok); }
-  #status.warn, #notesStatus.warn { color: var(--warn); }
+  #status.ok, #notesStatus.ok, #loginStatus.ok, #adminStatus.ok { color: var(--ok); }
+  #status.warn, #notesStatus.warn, #loginStatus.warn, #adminStatus.warn { color: var(--warn); }
   .progress-bar {
     height: 8px;
     background: #ececf3;
@@ -131,150 +136,202 @@
     border-radius: 999px;
     margin-left: 6px;
   }
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .topbar .who {
+    font-size: 14px;
+    color: var(--muted);
+  }
   details.advanced {
-    margin-top: 14px;
+    margin-top: 18px;
     font-size: 13px;
   }
   details.advanced summary {
     cursor: pointer;
-    color: var(--primary-dark);
-    font-weight: 600;
+    color: var(--muted);
+  }
+  details.advanced .card {
+    margin-top: 12px;
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>🎙️ Хурлын аудио → Текст → Тэмдэглэл</h1>
-  <p class="subtitle">Аудио файлаа сонгоод, компьютер/утасны хөтөч дээр л шууд текст болгоно (сервер рүү илгээхгүй).</p>
 
-  <div class="card">
-    <label for="openaiKeyInput">OpenAI API түлхүүр (сонголт, санал болгож буй) <span class="badge">илүү нарийвчлалтай</span></label>
-    <input type="password" id="openaiKeyInput" placeholder="sk-... (OpenAI API түлхүүр)">
-    <div class="hint">
-      Компьютерт татагддаг жижиг загвар монгол хэлийг дунд зэрэг л мэддэг тул алдаа их гардаг.
-      OpenAI-н түлхүүр өгвөл, илүү том, чанартай загвараар (OpenAI Whisper API) транскрипц хийж, нарийвчлал мэдэгдэхүйц сайжирна.
-      Түлхүүрээ <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>-с авна.
-      Түлхүүр зөвхөн танай хөтчид үлдэж, шууд OpenAI руу илгээгдэнэ. Түлхүүргүй бол доорх үнэгүй, хөтөч дотор ажилладаг загвар ашиглана.
+  <!-- ЛОГИН ХЭСЭГ -->
+  <div id="loginView">
+    <h1>🎙️ Хурлын тэмдэглэл</h1>
+    <p class="subtitle">Компанийн дотоод хэрэглээнд зориулсан — нэвтэрч орно уу.</p>
+    <div class="card">
+      <label for="loginUsername">Нэвтрэх нэр</label>
+      <input type="text" id="loginUsername" autocomplete="username" placeholder="нэвтрэх нэр">
+      <div style="height:12px;"></div>
+      <label for="loginPassword">Нууц үг</label>
+      <input type="password" id="loginPassword" autocomplete="current-password" placeholder="нууц үг">
+      <button id="loginBtn">Нэвтрэх</button>
+      <div id="loginStatus"></div>
+      <div class="hint">Нэвтрэх нэр, нууц үггүй бол админаас (тухайн байгууллагын хариуцсан хүнээс) авна уу.</div>
     </div>
+  </div>
 
-    <div class="row" style="margin-top:14px;">
-      <div>
-        <label for="modelSelect">Загварын хэмжээ (OpenAI түлхүүргүй үед)</label>
-        <select id="modelSelect">
-          <option value="Xenova/whisper-tiny">Tiny — хамгийн хурдан, бага нарийвчлал</option>
-          <option value="Xenova/whisper-base">Base — хурдан, дунд зэрэг нарийвчлал</option>
-          <option value="Xenova/whisper-small" selected>Small — санал болгож буй</option>
-          <option value="Xenova/whisper-medium">Medium — хамгийн нарийвчлалтай, маш удаан (том аудиод тохиромжгүй)</option>
-        </select>
+  <!-- ГОЛ АПП -->
+  <div id="appView" style="display:none;">
+    <div class="topbar">
+      <h1 style="margin:0;">🎙️ Хурлын аудио → Текст → Тэмдэглэл</h1>
+    </div>
+    <div class="topbar">
+      <p class="subtitle" style="margin:0;">Аудио файлаа сонгоод, текст болгож, дараа нь хурлын тэмдэглэл болгоно.</p>
+      <div class="who">
+        <span id="whoAmI"></span>
+        · <a href="#" id="logoutLink">Гарах</a>
       </div>
-      <div>
-        <label for="audioFile">Аудио файл</label>
-        <input type="file" id="audioFile" accept="audio/*,video/mp4,video/webm">
+    </div>
+
+    <div class="card">
+      <label for="audioFile">Аудио файл</label>
+      <input type="file" id="audioFile" accept="audio/*,video/mp4,video/webm">
+
+      <button id="startBtn">Транскрипц хийж эхлэх</button>
+      <div class="progress-bar" id="progressBar"><div id="progressFill"></div></div>
+      <div id="status">Бэлэн байна.</div>
+    </div>
+
+    <div class="card" id="resultCard" style="display:none;">
+      <label>Гарсан текст <span class="badge">Монгол</span></label>
+      <textarea id="resultText"></textarea>
+      <button class="secondary" id="copyBtn">Хуулах</button>
+      <button class="secondary" id="downloadBtn">.txt болгож татах</button>
+      <div class="hint" id="qualityHint"></div>
+    </div>
+
+    <div class="card" id="notesCard" style="display:none;">
+      <label>Хурлын тэмдэглэл болгох</label>
+      <button id="organizeBtn">Тэмдэглэл болгох</button>
+      <div id="notesStatus"></div>
+      <div id="notesResult" style="display:none; margin-top:14px;">
+        <label>Цэгцэлсэн хурлын тэмдэглэл</label>
+        <textarea id="notesText"></textarea>
+        <button class="secondary" id="copyNotesBtn">Хуулах</button>
+        <button class="secondary" id="downloadNotesBtn">.txt болгож татах</button>
       </div>
     </div>
 
-    <button id="startBtn">Транскрипц хийж эхлэх</button>
-    <div class="progress-bar" id="progressBar"><div id="progressFill"></div></div>
-    <div id="status">Бэлэн байна. OpenAI түлхүүргүй бол эхний удаа ажиллуулахад загварыг татах тул (~100–300MB) хэдэн минут болно. Дараагийн удаа хөтөч кэшилсэн тул хурдан эхэлнэ.</div>
+    <details class="advanced">
+      <summary>Админ панель (зөвхөн эрх бүхий хүнд)</summary>
+      <div class="card">
+        <label for="adminKeyInput">Admin key</label>
+        <input type="password" id="adminKeyInput" placeholder="admin key">
+        <div style="height:12px;"></div>
+        <div class="row">
+          <div>
+            <label for="newUsername">Шинэ ажилтны нэвтрэх нэр</label>
+            <input type="text" id="newUsername" placeholder="нэвтрэх нэр">
+          </div>
+          <div>
+            <label for="newPassword">Шинэ ажилтны нууц үг</label>
+            <input type="password" id="newPassword" placeholder="нууц үг (6+ тэмдэгт)">
+          </div>
+        </div>
+        <button class="small" id="createUserBtn">Ажилтан нэмэх</button>
+        <button class="small secondary" id="listUsersBtn">Ажилтнуудыг жагсаах</button>
+        <div id="adminStatus"></div>
+      </div>
+    </details>
   </div>
 
-  <div class="card" id="resultCard" style="display:none;">
-    <label>Гарсан текст <span class="badge">Монгол</span></label>
-    <textarea id="resultText"></textarea>
-    <button class="secondary" id="copyBtn">Хуулах</button>
-    <button class="secondary" id="downloadBtn">.txt болгож татах</button>
-    <div class="hint" id="qualityHint"></div>
-  </div>
-
-  <div class="card" id="notesCard" style="display:none;">
-    <label for="apiKeyInput">Хурлын тэмдэглэл болгох (сонголт) <span class="badge">Claude API</span></label>
-    <input type="password" id="apiKeyInput" placeholder="sk-ant-... (Anthropic API түлхүүр)">
-    <div class="hint">
-      Түлхүүрээ <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>-с авна.
-      Түлхүүр зөвхөн танай хөтчид үлдэж, шууд Anthropic руу илгээгдэнэ — хаана ч хадгалагдахгүй.
-    </div>
-    <button id="organizeBtn">Тэмдэглэл болгох</button>
-    <div id="notesStatus"></div>
-    <div id="notesResult" style="display:none; margin-top:14px;">
-      <label>Цэгцэлсэн хурлын тэмдэглэл</label>
-      <textarea id="notesText"></textarea>
-      <button class="secondary" id="copyNotesBtn">Хуулах</button>
-      <button class="secondary" id="downloadNotesBtn">.txt болгож татах</button>
-    </div>
-    <div class="hint">
-      Түлхүүргүй бол дээрх түүхий текстийг хуулаад Claude-тэй ярианд (Cowork) оруулж
-      <b>"хурлын тэмдэглэл болго"</b> гэж хэлж болно — тэнд Word баримт болгож өгнө.
-    </div>
-  </div>
-
-  <div class="hint" style="text-align:center;">
-    Санамж: Chrome эсвэл Edge хөтчөөр нээхийг зөвлөж байна. Урт (30 минутаас дээш) аудио дээр
-    жижиг компьютерт удаан хугацаа шаардаж болно — тэвчээртэй байна уу.
-  </div>
 </div>
 
-<script type="module">
-  // The actual Whisper inference runs inside a Web Worker so the page's
-  // main thread never blocks — without this, long transcriptions can
-  // trigger the browser's "Page Unresponsive" warning because WASM
-  // model inference is CPU-heavy and mostly synchronous.
-  const WORKER_CODE = `
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+<script>
+  const WORKER_URL = 'https://khural-backend.basjargalzoljargal.workers.dev';
 
-    let transcriber = null;
-    let currentModel = null;
+  // ---------- Session helpers ----------
+  function saveSession(token, username) {
+    localStorage.setItem('khural_token', token);
+    localStorage.setItem('khural_username', username);
+  }
+  function getToken() { return localStorage.getItem('khural_token'); }
+  function getUsername() { return localStorage.getItem('khural_username'); }
+  function clearSession() {
+    localStorage.removeItem('khural_token');
+    localStorage.removeItem('khural_username');
+  }
 
-    self.onmessage = async (e) => {
-      const { audio, modelId, language } = e.data;
-      try {
-        if (!transcriber || currentModel !== modelId) {
-          transcriber = await pipeline('automatic-speech-recognition', modelId, {
-            progress_callback: (data) => self.postMessage({ type: 'progress', data }),
-          });
-          currentModel = modelId;
-        }
-        const output = await transcriber(audio, {
-          language,
-          task: 'transcribe',
-          chunk_length_s: 30,
-          stride_length_s: 5,
-        });
-        self.postMessage({ type: 'result', text: output.text || '' });
-      } catch (err) {
-        self.postMessage({ type: 'error', message: (err && err.message) || String(err) });
-      }
-    };
-  `;
+  const loginView = document.getElementById('loginView');
+  const appView = document.getElementById('appView');
+  const loginUsername = document.getElementById('loginUsername');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginStatus = document.getElementById('loginStatus');
+  const whoAmI = document.getElementById('whoAmI');
+  const logoutLink = document.getElementById('logoutLink');
 
-  let worker = null;
-  function getWorker() {
-    if (!worker) {
-      const blob = new Blob([WORKER_CODE], { type: 'text/javascript' });
-      worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+  function showApp() {
+    loginView.style.display = 'none';
+    appView.style.display = 'block';
+    whoAmI.textContent = getUsername() || '';
+  }
+  function showLogin(message) {
+    clearSession();
+    loginView.style.display = 'block';
+    appView.style.display = 'none';
+    if (message) {
+      loginStatus.textContent = message;
+      loginStatus.className = 'warn';
     }
-    return worker;
   }
 
-  function transcribeInWorker(audio, modelId, language, onProgress) {
-    return new Promise((resolve, reject) => {
-      const w = getWorker();
-      const handleMessage = (e) => {
-        const msg = e.data;
-        if (msg.type === 'progress') {
-          onProgress(msg.data);
-        } else if (msg.type === 'result') {
-          w.removeEventListener('message', handleMessage);
-          resolve(msg.text);
-        } else if (msg.type === 'error') {
-          w.removeEventListener('message', handleMessage);
-          reject(new Error(msg.message));
-        }
-      };
-      w.addEventListener('message', handleMessage);
-      w.postMessage({ audio, modelId, language }, [audio.buffer]);
-    });
+  loginBtn.addEventListener('click', async () => {
+    const username = loginUsername.value.trim();
+    const password = loginPassword.value;
+    if (!username || !password) {
+      loginStatus.textContent = 'Нэвтрэх нэр, нууц үгээ оруулна уу.';
+      loginStatus.className = 'warn';
+      return;
+    }
+    loginBtn.disabled = true;
+    loginStatus.textContent = 'Шалгаж байна...';
+    loginStatus.className = '';
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Нэвтрэх нэр эсвэл нууц үг буруу байна');
+      saveSession(data.token, data.username);
+      loginPassword.value = '';
+      showApp();
+    } catch (err) {
+      loginStatus.textContent = 'Алдаа: ' + (err.message || err);
+      loginStatus.className = 'warn';
+    } finally {
+      loginBtn.disabled = false;
+    }
+  });
+
+  loginPassword.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loginBtn.click();
+  });
+
+  logoutLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    showLogin();
+  });
+
+  // On load, if we already have a token, go straight to the app.
+  // (If the token has expired, the first API call will bounce us back to login.)
+  if (getToken()) {
+    showApp();
+  } else {
+    showLogin();
   }
 
+  // ---------- Main app ----------
   const startBtn = document.getElementById('startBtn');
   const statusEl = document.getElementById('status');
   const progressBar = document.getElementById('progressBar');
@@ -284,12 +341,9 @@
   const copyBtn = document.getElementById('copyBtn');
   const downloadBtn = document.getElementById('downloadBtn');
   const qualityHint = document.getElementById('qualityHint');
-  const modelSelect = document.getElementById('modelSelect');
   const audioFile = document.getElementById('audioFile');
-  const openaiKeyInput = document.getElementById('openaiKeyInput');
 
   const notesCard = document.getElementById('notesCard');
-  const apiKeyInput = document.getElementById('apiKeyInput');
   const organizeBtn = document.getElementById('organizeBtn');
   const notesStatus = document.getElementById('notesStatus');
   const notesResult = document.getElementById('notesResult');
@@ -311,9 +365,8 @@
     progressFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
-  // Whisper (esp. smaller models) can get stuck in a repetition loop on
-  // unclear audio/music. Collapse any word/phrase (1-4 words) that repeats
-  // 4+ times in a row down to a single occurrence.
+  // Whisper can get stuck in a repetition loop on unclear audio. Collapse
+  // any word/phrase (1-4 words) that repeats 4+ times in a row.
   function cleanupRepetitions(text) {
     let cleaned = text;
     for (let n = 4; n >= 1; n--) {
@@ -324,96 +377,24 @@
     return cleaned.replace(/\s{2,}/g, ' ').trim();
   }
 
-  // Rough heuristic: if a large fraction of the (cleaned) text is a single
-  // repeated short token, or the text is full of characters outside
-  // Mongolian Cyrillic / basic Latin / punctuation, the transcription
-  // likely failed on this audio (model hallucinating into other scripts).
   function looksGarbled(original, cleaned) {
     if (!original) return true;
     const shrinkRatio = cleaned.length / original.length;
     if (shrinkRatio < 0.5 || cleaned.length < 5) return true;
-
     const total = cleaned.replace(/\s/g, '').length || 1;
     const allowed = (cleaned.match(/[Ѐ-ӿ -~a-zA-Z.,!?;:'"()\-]/g) || []).length;
     return (allowed / total) < 0.85;
   }
 
-  // Decode the audio file ourselves and normalize its volume before
-  // handing it to Whisper. Quiet/low-gain recordings (common with phone
-  // recordings or downloaded clips) noticeably hurt recognition quality.
-  async function loadNormalizedAudio(file, targetSampleRate = 16000) {
-    const arrayBuffer = await file.arrayBuffer();
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: targetSampleRate });
-    const decoded = await audioCtx.decodeAudioData(arrayBuffer);
-
-    const numChannels = decoded.numberOfChannels;
-    const length = decoded.length;
-    let mono = new Float32Array(length);
-    if (numChannels === 1) {
-      mono.set(decoded.getChannelData(0));
-    } else {
-      const ch0 = decoded.getChannelData(0);
-      const ch1 = decoded.getChannelData(1);
-      for (let i = 0; i < length; i++) {
-        mono[i] = (ch0[i] + ch1[i]) * 0.70710678;
-      }
+  async function authedFetch(path, options = {}) {
+    const token = getToken();
+    const headers = Object.assign({}, options.headers || {}, { Authorization: `Bearer ${token}` });
+    const resp = await fetch(`${WORKER_URL}${path}`, Object.assign({}, options, { headers }));
+    if (resp.status === 401) {
+      showLogin('Нэвтрэх хугацаа дууссан байна. Дахин нэвтэрнэ үү.');
+      throw new Error('Дахин нэвтэрнэ үү.');
     }
-
-    let peak = 0;
-    for (let i = 0; i < mono.length; i++) {
-      const abs = Math.abs(mono[i]);
-      if (abs > peak) peak = abs;
-    }
-
-    if (peak > 0.001 && peak < 0.9) {
-      const targetPeak = 0.9;
-      const gain = Math.min(targetPeak / peak, 10); // cap gain to avoid blowing up near-silent clips
-      for (let i = 0; i < mono.length; i++) {
-        mono[i] = Math.max(-1, Math.min(1, mono[i] * gain));
-      }
-    }
-
-    try { audioCtx.close(); } catch (e) { /* ignore */ }
-    return mono;
-  }
-
-  // Sends the raw audio file to OpenAI's Whisper API for transcription.
-  // This uses OpenAI's full-size server-side model, which is far more
-  // accurate for low-resource languages like Mongolian than the small
-  // quantized models that can run inside a browser tab.
-  async function transcribeWithOpenAI(file, apiKey) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('model', 'whisper-1');
-    formData.append('language', 'mn');
-
-    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}` },
-      body: formData,
-    });
-
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      throw new Error(`OpenAI API алдаа (${resp.status}): ${errBody.slice(0, 300)}`);
-    }
-
-    const data = await resp.json();
-    return data.text || '';
-  }
-
-  const modelLoadProgress = {}; // file -> {loaded, total}, tracked per model-load
-  function handleWorkerProgress(data) {
-    if (data.status === 'progress' && data.file) {
-      modelLoadProgress[data.file] = { loaded: data.loaded || 0, total: data.total || 1 };
-      let sumLoaded = 0, sumTotal = 0;
-      for (const k in modelLoadProgress) { sumLoaded += modelLoadProgress[k].loaded; sumTotal += modelLoadProgress[k].total; }
-      const pct = sumTotal > 0 ? (sumLoaded / sumTotal) * 100 : 0;
-      updateProgress(pct);
-      setStatus(`Загвар татаж байна... ${pct.toFixed(0)}%`, '');
-    } else if (data.status === 'ready' || data.status === 'done') {
-      updateProgress(100);
-    }
+    return resp;
   }
 
   startBtn.addEventListener('click', async () => {
@@ -422,44 +403,31 @@
       setStatus('Эхлээд аудио файл сонгоно уу.', 'warn');
       return;
     }
-    const modelId = modelSelect.value;
-
-    const openaiKey = openaiKeyInput.value.trim();
 
     startBtn.disabled = true;
     resultCard.style.display = 'none';
     notesCard.style.display = 'none';
     try {
-      let rawText;
+      setStatus('Аудиог илгээж, транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
+      updateProgress(null);
 
-      if (openaiKey) {
-        setStatus('OpenAI-д илгээж, транскрипц хийж байна...', '');
-        updateProgress(null);
-        rawText = (await transcribeWithOpenAI(file, openaiKey)).trim();
-      } else {
-        setStatus('Аудиог уншиж, дуу чимээг тохируулж байна...', '');
-        const audioData = await loadNormalizedAudio(file);
+      const formData = new FormData();
+      formData.append('audio', file, file.name || 'audio.webm');
 
-        setStatus('Загвар бэлдэж, транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
-        updateProgress(null);
+      const resp = await authedFetch('/api/transcribe', { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Транскрипц хийхэд алдаа гарлаа');
 
-        const text = await transcribeInWorker(audioData, modelId, 'mongolian', handleWorkerProgress);
-        rawText = (text || '').trim();
-      }
-
+      const rawText = (data.text || '').trim();
       const cleaned = cleanupRepetitions(rawText);
 
       resultText.value = cleaned;
       resultCard.style.display = 'block';
       notesCard.style.display = 'block';
 
-      if (looksGarbled(rawText, cleaned)) {
-        qualityHint.textContent = openaiKey
-          ? '⚠️ Гарсан текст тодорхойгүй харагдаж байна. Аудио дуу чанар маш муу, эсвэл огт монгол яриа биш байж магадгүй.'
-          : '⚠️ Гарсан текст давтагдсан/тодорхойгүй харагдаж байна. Дээрх OpenAI түлхүүр ашиглах эсвэл "Medium" загвараар дахин туршиж үзээрэй — үнэгүй жижиг загвар монгол хэлийг сул мэддэг.';
-      } else {
-        qualityHint.textContent = '';
-      }
+      qualityHint.textContent = looksGarbled(rawText, cleaned)
+        ? '⚠️ Гарсан текст тодорхойгүй харагдаж байна. Аудио дуу чанар маш муу, эсвэл огт монгол яриа биш байж магадгүй.'
+        : '';
 
       setStatus('Дууслаа. Доор шаардлагатай бол засаад, "Тэмдэглэл болгох" дараарай.', 'ok');
     } catch (err) {
@@ -486,30 +454,10 @@
     URL.revokeObjectURL(url);
   });
 
-  const MEETING_SYSTEM_PROMPT = `Чи хурлын тэмдэглэл бэлддэг туслах. Хэрэглэгч монгол хэл дээрх хурлын аудионы
-шулуухан (найруулаагүй) транскрипцийг өгнө. Үүнийг уншиж, зөвхөн эх текстэд байгаа мэдээлэлд
-үндэслэн, дараах бүтэцтэй, цэгцтэй, албан ёсны хурлын тэмдэглэл болгож монгол хэлээр найруулж бич:
-
-Гарчиг
-Огноо (текстээс тодорхойгүй бол энэ мөрийг бүү бич)
-Оролцогчид (тодорхойгүй бол "Тодорхойгүй" гэж бич)
-Хэлэлцсэн асуудлууд (жагсаалтаар)
-Гарсан шийдвэрүүд
-Дараагийн алхам / Даалгаврууд (хариуцагч, хугацаа мэдэгдэж байвал дурьд)
-
-Эх текстэд байхгүй мэдээллийг зохиож бүү нэм. Зөвхөн эцсийн тэмдэглэлийг гарга, нэмэлт тайлбар бүү бич.`;
-
   organizeBtn.addEventListener('click', async () => {
-    const apiKey = apiKeyInput.value.trim();
     const transcript = resultText.value.trim();
-
     if (!transcript) {
       notesStatus.textContent = 'Эхлээд аудиогоо транскрипц хийнэ үү.';
-      notesStatus.className = 'warn';
-      return;
-    }
-    if (!apiKey) {
-      notesStatus.textContent = 'Anthropic API түлхүүрээ оруулна уу.';
       notesStatus.className = 'warn';
       return;
     }
@@ -520,31 +468,15 @@
     notesStatus.className = '';
 
     try {
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      const resp = await authedFetch('/api/organize', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 2000,
-          system: MEETING_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: transcript }],
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript }),
       });
-
-      if (!resp.ok) {
-        const errBody = await resp.text();
-        throw new Error(`API алдаа (${resp.status}): ${errBody.slice(0, 300)}`);
-      }
-
       const data = await resp.json();
-      const text = (data.content || []).map(b => b.text || '').join('\n').trim();
+      if (!resp.ok) throw new Error(data.error || 'Тэмдэглэл бэлдэхэд алдаа гарлаа');
 
-      notesText.value = text;
+      notesText.value = (data.notes || '').trim();
       notesResult.style.display = 'block';
       notesStatus.textContent = 'Дууслаа.';
       notesStatus.className = 'ok';
@@ -571,6 +503,74 @@
     a.download = 'khural_temdeglel_zohison.txt';
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // ---------- Admin panel ----------
+  const adminKeyInput = document.getElementById('adminKeyInput');
+  const newUsername = document.getElementById('newUsername');
+  const newPassword = document.getElementById('newPassword');
+  const createUserBtn = document.getElementById('createUserBtn');
+  const listUsersBtn = document.getElementById('listUsersBtn');
+  const adminStatus = document.getElementById('adminStatus');
+
+  createUserBtn.addEventListener('click', async () => {
+    const adminKey = adminKeyInput.value.trim();
+    const username = newUsername.value.trim();
+    const password = newPassword.value;
+    if (!adminKey || !username || !password) {
+      adminStatus.textContent = 'Admin key, нэвтрэх нэр, нууц үг бүгдийг оруулна уу.';
+      adminStatus.className = 'warn';
+      return;
+    }
+    createUserBtn.disabled = true;
+    adminStatus.textContent = 'Нэмж байна...';
+    adminStatus.className = '';
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/admin/create-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Ажилтан нэмэхэд алдаа гарлаа');
+      adminStatus.textContent = `"${data.username}" нэртэй ажилтан амжилттай нэмэгдлээ.`;
+      adminStatus.className = 'ok';
+      newUsername.value = '';
+      newPassword.value = '';
+    } catch (err) {
+      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
+      adminStatus.className = 'warn';
+    } finally {
+      createUserBtn.disabled = false;
+    }
+  });
+
+  listUsersBtn.addEventListener('click', async () => {
+    const adminKey = adminKeyInput.value.trim();
+    if (!adminKey) {
+      adminStatus.textContent = 'Admin key оруулна уу.';
+      adminStatus.className = 'warn';
+      return;
+    }
+    listUsersBtn.disabled = true;
+    adminStatus.textContent = 'Уншиж байна...';
+    adminStatus.className = '';
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/admin/list-users`, {
+        headers: { 'x-admin-key': adminKey },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Уншихад алдаа гарлаа');
+      adminStatus.textContent = data.users.length
+        ? 'Ажилтнууд: ' + data.users.join(', ')
+        : 'Одоогоор ажилтан бүртгэгдээгүй байна.';
+      adminStatus.className = 'ok';
+    } catch (err) {
+      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
+      adminStatus.className = 'warn';
+    } finally {
+      listUsersBtn.disabled = false;
+    }
   });
 </script>
 </body>
