@@ -148,9 +148,18 @@
   <p class="subtitle">Аудио файлаа сонгоод, компьютер/утасны хөтөч дээр л шууд текст болгоно (сервер рүү илгээхгүй).</p>
 
   <div class="card">
-    <div class="row">
+    <label for="openaiKeyInput">OpenAI API түлхүүр (сонголт, санал болгож буй) <span class="badge">илүү нарийвчлалтай</span></label>
+    <input type="password" id="openaiKeyInput" placeholder="sk-... (OpenAI API түлхүүр)">
+    <div class="hint">
+      Компьютерт татагддаг жижиг загвар монгол хэлийг дунд зэрэг л мэддэг тул алдаа их гардаг.
+      OpenAI-н түлхүүр өгвөл, илүү том, чанартай загвараар (OpenAI Whisper API) транскрипц хийж, нарийвчлал мэдэгдэхүйц сайжирна.
+      Түлхүүрээ <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">platform.openai.com</a>-с авна.
+      Түлхүүр зөвхөн танай хөтчид үлдэж, шууд OpenAI руу илгээгдэнэ. Түлхүүргүй бол доорх үнэгүй, хөтөч дотор ажилладаг загвар ашиглана.
+    </div>
+
+    <div class="row" style="margin-top:14px;">
       <div>
-        <label for="modelSelect">Загварын хэмжээ</label>
+        <label for="modelSelect">Загварын хэмжээ (OpenAI түлхүүргүй үед)</label>
         <select id="modelSelect">
           <option value="Xenova/whisper-tiny">Tiny — хамгийн хурдан, бага нарийвчлал</option>
           <option value="Xenova/whisper-base">Base — хурдан, дунд зэрэг нарийвчлал</option>
@@ -166,7 +175,7 @@
 
     <button id="startBtn">Транскрипц хийж эхлэх</button>
     <div class="progress-bar" id="progressBar"><div id="progressFill"></div></div>
-    <div id="status">Бэлэн байна. Эхний удаа ажиллуулахад загварыг татах тул (~100–300MB) хэдэн минут болно. Дараагийн удаа хөтөч кэшилсэн тул хурдан эхэлнэ.</div>
+    <div id="status">Бэлэн байна. OpenAI түлхүүргүй бол эхний удаа ажиллуулахад загварыг татах тул (~100–300MB) хэдэн минут болно. Дараагийн удаа хөтөч кэшилсэн тул хурдан эхэлнэ.</div>
   </div>
 
   <div class="card" id="resultCard" style="display:none;">
@@ -277,6 +286,7 @@
   const qualityHint = document.getElementById('qualityHint');
   const modelSelect = document.getElementById('modelSelect');
   const audioFile = document.getElementById('audioFile');
+  const openaiKeyInput = document.getElementById('openaiKeyInput');
 
   const notesCard = document.getElementById('notesCard');
   const apiKeyInput = document.getElementById('apiKeyInput');
@@ -367,6 +377,31 @@
     return mono;
   }
 
+  // Sends the raw audio file to OpenAI's Whisper API for transcription.
+  // This uses OpenAI's full-size server-side model, which is far more
+  // accurate for low-resource languages like Mongolian than the small
+  // quantized models that can run inside a browser tab.
+  async function transcribeWithOpenAI(file, apiKey) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'mn');
+
+    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: formData,
+    });
+
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`OpenAI API алдаа (${resp.status}): ${errBody.slice(0, 300)}`);
+    }
+
+    const data = await resp.json();
+    return data.text || '';
+  }
+
   const modelLoadProgress = {}; // file -> {loaded, total}, tracked per model-load
   function handleWorkerProgress(data) {
     if (data.status === 'progress' && data.file) {
@@ -389,19 +424,29 @@
     }
     const modelId = modelSelect.value;
 
+    const openaiKey = openaiKeyInput.value.trim();
+
     startBtn.disabled = true;
     resultCard.style.display = 'none';
     notesCard.style.display = 'none';
     try {
-      setStatus('Аудиог уншиж, дуу чимээг тохируулж байна...', '');
-      const audioData = await loadNormalizedAudio(file);
+      let rawText;
 
-      setStatus('Загвар бэлдэж, транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
-      updateProgress(null);
+      if (openaiKey) {
+        setStatus('OpenAI-д илгээж, транскрипц хийж байна...', '');
+        updateProgress(null);
+        rawText = (await transcribeWithOpenAI(file, openaiKey)).trim();
+      } else {
+        setStatus('Аудиог уншиж, дуу чимээг тохируулж байна...', '');
+        const audioData = await loadNormalizedAudio(file);
 
-      const text = await transcribeInWorker(audioData, modelId, 'mongolian', handleWorkerProgress);
+        setStatus('Загвар бэлдэж, транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
+        updateProgress(null);
 
-      const rawText = (text || '').trim();
+        const text = await transcribeInWorker(audioData, modelId, 'mongolian', handleWorkerProgress);
+        rawText = (text || '').trim();
+      }
+
       const cleaned = cleanupRepetitions(rawText);
 
       resultText.value = cleaned;
@@ -409,7 +454,9 @@
       notesCard.style.display = 'block';
 
       if (looksGarbled(rawText, cleaned)) {
-        qualityHint.textContent = '⚠️ Гарсан текст давтагдсан/тодорхойгүй харагдаж байна. "Base" эсвэл өөр загвараар дахин туршиж үзээрэй — аудио чанар муу эсвэл дуу хоолойгүй хэсэг (хөгжим г.м.) байж магадгүй.';
+        qualityHint.textContent = openaiKey
+          ? '⚠️ Гарсан текст тодорхойгүй харагдаж байна. Аудио дуу чанар маш муу, эсвэл огт монгол яриа биш байж магадгүй.'
+          : '⚠️ Гарсан текст давтагдсан/тодорхойгүй харагдаж байна. Дээрх OpenAI түлхүүр ашиглах эсвэл "Medium" загвараар дахин туршиж үзээрэй — үнэгүй жижиг загвар монгол хэлийг сул мэддэг.';
       } else {
         qualityHint.textContent = '';
       }
