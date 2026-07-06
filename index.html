@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Хурлын тэмдэглэл — Аудио → Текст</title>
+<style>
+  :root {
+    --bg: #f7f7f8;
+    --card: #ffffff;
+    --border: #e2e2e6;
+    --primary: #5b48ee;
+    --primary-dark: #4636c4;
+    --text: #1f1f24;
+    --muted: #6b6b76;
+    --ok: #1a8a4a;
+    --warn: #b8590c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 32px 16px;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  p.subtitle {
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  select, input[type="file"], input[type="password"] {
+    width: 100%;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 14px;
+    background: #fff;
+  }
+  .row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .row > div { flex: 1; min-width: 200px; }
+  button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 16px;
+  }
+  button:hover { background: var(--primary-dark); }
+  button:disabled { background: #b7b3e8; cursor: not-allowed; }
+  button.secondary {
+    background: #eee;
+    color: var(--text);
+  }
+  button.secondary:hover { background: #e0e0e0; }
+  #status, #notesStatus {
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--muted);
+    white-space: pre-line;
+  }
+  #status.ok, #notesStatus.ok { color: var(--ok); }
+  #status.warn, #notesStatus.warn { color: var(--warn); }
+  .progress-bar {
+    height: 8px;
+    background: #ececf3;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 10px;
+    display: none;
+  }
+  .progress-bar > div {
+    height: 100%;
+    width: 0%;
+    background: var(--primary);
+    transition: width .2s;
+  }
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    font-family: inherit;
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 12px;
+    background: #efeaff;
+    color: var(--primary-dark);
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 6px;
+  }
+  details.advanced {
+    margin-top: 14px;
+    font-size: 13px;
+  }
+  details.advanced summary {
+    cursor: pointer;
+    color: var(--primary-dark);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎙️ Хурлын аудио → Текст → Тэмдэглэл</h1>
+  <p class="subtitle">Аудио файлаа сонгоод, компьютер/утасны хөтөч дээр л шууд текст болгоно (сервер рүү илгээхгүй).</p>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="modelSelect">Загварын хэмжээ</label>
+        <select id="modelSelect">
+          <option value="Xenova/whisper-tiny">Tiny — хамгийн хурдан, бага нарийвчлал</option>
+          <option value="Xenova/whisper-base">Base — хурдан, дунд зэрэг нарийвчлал</option>
+          <option value="Xenova/whisper-small" selected>Small — санал болгож буй</option>
+          <option value="Xenova/whisper-medium">Medium — хамгийн нарийвчлалтай, маш удаан (том аудиод тохиромжгүй)</option>
+        </select>
+      </div>
+      <div>
+        <label for="audioFile">Аудио файл</label>
+        <input type="file" id="audioFile" accept="audio/*,video/mp4,video/webm">
+      </div>
+    </div>
+
+    <button id="startBtn">Транскрипц хийж эхлэх</button>
+    <div class="progress-bar" id="progressBar"><div id="progressFill"></div></div>
+    <div id="status">Бэлэн байна. Эхний удаа ажиллуулахад загварыг татах тул (~100–300MB) хэдэн минут болно. Дараагийн удаа хөтөч кэшилсэн тул хурдан эхэлнэ.</div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <label>Гарсан текст <span class="badge">Монгол</span></label>
+    <textarea id="resultText"></textarea>
+    <button class="secondary" id="copyBtn">Хуулах</button>
+    <button class="secondary" id="downloadBtn">.txt болгож татах</button>
+    <div class="hint" id="qualityHint"></div>
+  </div>
+
+  <div class="card" id="notesCard" style="display:none;">
+    <label for="apiKeyInput">Хурлын тэмдэглэл болгох (сонголт) <span class="badge">Claude API</span></label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-... (Anthropic API түлхүүр)">
+    <div class="hint">
+      Түлхүүрээ <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>-с авна.
+      Түлхүүр зөвхөн танай хөтчид үлдэж, шууд Anthropic руу илгээгдэнэ — хаана ч хадгалагдахгүй.
+    </div>
+    <button id="organizeBtn">Тэмдэглэл болгох</button>
+    <div id="notesStatus"></div>
+    <div id="notesResult" style="display:none; margin-top:14px;">
+      <label>Цэгцэлсэн хурлын тэмдэглэл</label>
+      <textarea id="notesText"></textarea>
+      <button class="secondary" id="copyNotesBtn">Хуулах</button>
+      <button class="secondary" id="downloadNotesBtn">.txt болгож татах</button>
+    </div>
+    <div class="hint">
+      Түлхүүргүй бол дээрх түүхий текстийг хуулаад Claude-тэй ярианд (Cowork) оруулж
+      <b>"хурлын тэмдэглэл болго"</b> гэж хэлж болно — тэнд Word баримт болгож өгнө.
+    </div>
+  </div>
+
+  <div class="hint" style="text-align:center;">
+    Санамж: Chrome эсвэл Edge хөтчөөр нээхийг зөвлөж байна. Урт (30 минутаас дээш) аудио дээр
+    жижиг компьютерт удаан хугацаа шаардаж болно — тэвчээртэй байна уу.
+  </div>
+</div>
+
+<script type="module">
+  import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+  const startBtn = document.getElementById('startBtn');
+  const statusEl = document.getElementById('status');
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const resultCard = document.getElementById('resultCard');
+  const resultText = document.getElementById('resultText');
+  const copyBtn = document.getElementById('copyBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const qualityHint = document.getElementById('qualityHint');
+  const modelSelect = document.getElementById('modelSelect');
+  const audioFile = document.getElementById('audioFile');
+
+  const notesCard = document.getElementById('notesCard');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const organizeBtn = document.getElementById('organizeBtn');
+  const notesStatus = document.getElementById('notesStatus');
+  const notesResult = document.getElementById('notesResult');
+  const notesText = document.getElementById('notesText');
+  const copyNotesBtn = document.getElementById('copyNotesBtn');
+  const downloadNotesBtn = document.getElementById('downloadNotesBtn');
+
+  let transcriberCache = {};
+
+  function setStatus(text, kind) {
+    statusEl.textContent = text;
+    statusEl.className = kind || '';
+  }
+
+  function updateProgress(pct) {
+    if (pct === null) {
+      progressBar.style.display = 'none';
+      return;
+    }
+    progressBar.style.display = 'block';
+    progressFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+
+  // Whisper (esp. smaller models) can get stuck in a repetition loop on
+  // unclear audio/music. Collapse any word/phrase (1-4 words) that repeats
+  // 4+ times in a row down to a single occurrence.
+  function cleanupRepetitions(text) {
+    let cleaned = text;
+    for (let n = 4; n >= 1; n--) {
+      const phrase = `(\\S+(?:\\s+\\S+){${n - 1}})`;
+      const re = new RegExp(`\\b${phrase}(?:\\s+\\1\\b){3,}`, 'gi');
+      cleaned = cleaned.replace(re, '$1');
+    }
+    return cleaned.replace(/\s{2,}/g, ' ').trim();
+  }
+
+  // Rough heuristic: if a large fraction of the (cleaned) text is a single
+  // repeated short token, or the text is full of characters outside
+  // Mongolian Cyrillic / basic Latin / punctuation, the transcription
+  // likely failed on this audio (model hallucinating into other scripts).
+  function looksGarbled(original, cleaned) {
+    if (!original) return true;
+    const shrinkRatio = cleaned.length / original.length;
+    if (shrinkRatio < 0.5 || cleaned.length < 5) return true;
+
+    const total = cleaned.replace(/\s/g, '').length || 1;
+    const allowed = (cleaned.match(/[Ѐ-ӿ -~a-zA-Z.,!?;:'"()\-]/g) || []).length;
+    return (allowed / total) < 0.85;
+  }
+
+  // Decode the audio file ourselves and normalize its volume before
+  // handing it to Whisper. Quiet/low-gain recordings (common with phone
+  // recordings or downloaded clips) noticeably hurt recognition quality.
+  async function loadNormalizedAudio(file, targetSampleRate = 16000) {
+    const arrayBuffer = await file.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: targetSampleRate });
+    const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+
+    const numChannels = decoded.numberOfChannels;
+    const length = decoded.length;
+    let mono = new Float32Array(length);
+    if (numChannels === 1) {
+      mono.set(decoded.getChannelData(0));
+    } else {
+      const ch0 = decoded.getChannelData(0);
+      const ch1 = decoded.getChannelData(1);
+      for (let i = 0; i < length; i++) {
+        mono[i] = (ch0[i] + ch1[i]) * 0.70710678;
+      }
+    }
+
+    let peak = 0;
+    for (let i = 0; i < mono.length; i++) {
+      const abs = Math.abs(mono[i]);
+      if (abs > peak) peak = abs;
+    }
+
+    if (peak > 0.001 && peak < 0.9) {
+      const targetPeak = 0.9;
+      const gain = Math.min(targetPeak / peak, 10); // cap gain to avoid blowing up near-silent clips
+      for (let i = 0; i < mono.length; i++) {
+        mono[i] = Math.max(-1, Math.min(1, mono[i] * gain));
+      }
+    }
+
+    try { audioCtx.close(); } catch (e) { /* ignore */ }
+    return mono;
+  }
+
+  async function getTranscriber(modelId) {
+    if (transcriberCache[modelId]) return transcriberCache[modelId];
+
+    const loaded = {}; // file -> {loaded, total}
+    const progress_callback = (data) => {
+      if (data.status === 'progress' && data.file) {
+        loaded[data.file] = { loaded: data.loaded || 0, total: data.total || 1 };
+        let sumLoaded = 0, sumTotal = 0;
+        for (const k in loaded) { sumLoaded += loaded[k].loaded; sumTotal += loaded[k].total; }
+        const pct = sumTotal > 0 ? (sumLoaded / sumTotal) * 100 : 0;
+        updateProgress(pct);
+        setStatus(`Загвар татаж байна... ${pct.toFixed(0)}%`, '');
+      } else if (data.status === 'ready') {
+        updateProgress(100);
+      }
+    };
+
+    setStatus('Загвар бэлдэж байна...', '');
+    const transcriber = await pipeline('automatic-speech-recognition', modelId, { progress_callback });
+    transcriberCache[modelId] = transcriber;
+    return transcriber;
+  }
+
+  startBtn.addEventListener('click', async () => {
+    const file = audioFile.files[0];
+    if (!file) {
+      setStatus('Эхлээд аудио файл сонгоно уу.', 'warn');
+      return;
+    }
+    const modelId = modelSelect.value;
+
+    startBtn.disabled = true;
+    resultCard.style.display = 'none';
+    notesCard.style.display = 'none';
+    try {
+      const transcriber = await getTranscriber(modelId);
+
+      setStatus('Аудиог уншиж, дуу чимээг тохируулж байна...', '');
+      const audioData = await loadNormalizedAudio(file);
+
+      setStatus('Транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
+      updateProgress(null);
+
+      const output = await transcriber(audioData, {
+        language: 'mongolian',
+        task: 'transcribe',
+        chunk_length_s: 30,
+        stride_length_s: 5,
+      });
+
+      const rawText = (output.text || '').trim();
+      const cleaned = cleanupRepetitions(rawText);
+
+      resultText.value = cleaned;
+      resultCard.style.display = 'block';
+      notesCard.style.display = 'block';
+
+      if (looksGarbled(rawText, cleaned)) {
+        qualityHint.textContent = '⚠️ Гарсан текст давтагдсан/тодорхойгүй харагдаж байна. "Base" эсвэл өөр загвараар дахин туршиж үзээрэй — аудио чанар муу эсвэл дуу хоолойгүй хэсэг (хөгжим г.м.) байж магадгүй.';
+      } else {
+        qualityHint.textContent = '';
+      }
+
+      setStatus('Дууслаа. Доор шаардлагатай бол засаад, "Тэмдэглэл болгох" дараарай.', 'ok');
+    } catch (err) {
+      console.error(err);
+      setStatus('Алдаа гарлаа: ' + (err.message || err), 'warn');
+    } finally {
+      startBtn.disabled = false;
+    }
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(resultText.value);
+    copyBtn.textContent = 'Хуулагдлаа ✓';
+    setTimeout(() => { copyBtn.textContent = 'Хуулах'; }, 1500);
+  });
+
+  downloadBtn.addEventListener('click', () => {
+    const blob = new Blob([resultText.value], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'khural_temdeglel.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  const MEETING_SYSTEM_PROMPT = `Чи хурлын тэмдэглэл бэлддэг туслах. Хэрэглэгч монгол хэл дээрх хурлын аудионы
+шулуухан (найруулаагүй) транскрипцийг өгнө. Үүнийг уншиж, зөвхөн эх текстэд байгаа мэдээлэлд
+үндэслэн, дараах бүтэцтэй, цэгцтэй, албан ёсны хурлын тэмдэглэл болгож монгол хэлээр найруулж бич:
+
+Гарчиг
+Огноо (текстээс тодорхойгүй бол энэ мөрийг бүү бич)
+Оролцогчид (тодорхойгүй бол "Тодорхойгүй" гэж бич)
+Хэлэлцсэн асуудлууд (жагсаалтаар)
+Гарсан шийдвэрүүд
+Дараагийн алхам / Даалгаврууд (хариуцагч, хугацаа мэдэгдэж байвал дурьд)
+
+Эх текстэд байхгүй мэдээллийг зохиож бүү нэм. Зөвхөн эцсийн тэмдэглэлийг гарга, нэмэлт тайлбар бүү бич.`;
+
+  organizeBtn.addEventListener('click', async () => {
+    const apiKey = apiKeyInput.value.trim();
+    const transcript = resultText.value.trim();
+
+    if (!transcript) {
+      notesStatus.textContent = 'Эхлээд аудиогоо транскрипц хийнэ үү.';
+      notesStatus.className = 'warn';
+      return;
+    }
+    if (!apiKey) {
+      notesStatus.textContent = 'Anthropic API түлхүүрээ оруулна уу.';
+      notesStatus.className = 'warn';
+      return;
+    }
+
+    organizeBtn.disabled = true;
+    notesResult.style.display = 'none';
+    notesStatus.textContent = 'Тэмдэглэл бэлдэж байна...';
+    notesStatus.className = '';
+
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          system: MEETING_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: transcript }],
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`API алдаа (${resp.status}): ${errBody.slice(0, 300)}`);
+      }
+
+      const data = await resp.json();
+      const text = (data.content || []).map(b => b.text || '').join('\n').trim();
+
+      notesText.value = text;
+      notesResult.style.display = 'block';
+      notesStatus.textContent = 'Дууслаа.';
+      notesStatus.className = 'ok';
+    } catch (err) {
+      console.error(err);
+      notesStatus.textContent = 'Алдаа гарлаа: ' + (err.message || err);
+      notesStatus.className = 'warn';
+    } finally {
+      organizeBtn.disabled = false;
+    }
+  });
+
+  copyNotesBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(notesText.value);
+    copyNotesBtn.textContent = 'Хуулагдлаа ✓';
+    setTimeout(() => { copyNotesBtn.textContent = 'Хуулах'; }, 1500);
+  });
+
+  downloadNotesBtn.addEventListener('click', () => {
+    const blob = new Blob([notesText.value], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'khural_temdeglel_zohison.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
