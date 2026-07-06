@@ -567,4 +567,14 @@
       adminStatus.textContent = data.users.length
         ? 'Ажилтнууд: ' + data.users.join(', ')
         : 'Одоогоор ажилтан бүртгэгдээгүй байна.';
-      adminStatus.className = 'ok
+      adminStatus.className = 'ok';
+    } catch (err) {
+      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
+      adminStatus.className = 'warn';
+    } finally {
+      listUsersBtn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
