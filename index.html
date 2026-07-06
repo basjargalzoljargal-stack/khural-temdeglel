@@ -205,7 +205,66 @@
 </div>
 
 <script type="module">
-  import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+  // The actual Whisper inference runs inside a Web Worker so the page's
+  // main thread never blocks — without this, long transcriptions can
+  // trigger the browser's "Page Unresponsive" warning because WASM
+  // model inference is CPU-heavy and mostly synchronous.
+  const WORKER_CODE = `
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+    let transcriber = null;
+    let currentModel = null;
+
+    self.onmessage = async (e) => {
+      const { audio, modelId, language } = e.data;
+      try {
+        if (!transcriber || currentModel !== modelId) {
+          transcriber = await pipeline('automatic-speech-recognition', modelId, {
+            progress_callback: (data) => self.postMessage({ type: 'progress', data }),
+          });
+          currentModel = modelId;
+        }
+        const output = await transcriber(audio, {
+          language,
+          task: 'transcribe',
+          chunk_length_s: 30,
+          stride_length_s: 5,
+        });
+        self.postMessage({ type: 'result', text: output.text || '' });
+      } catch (err) {
+        self.postMessage({ type: 'error', message: (err && err.message) || String(err) });
+      }
+    };
+  `;
+
+  let worker = null;
+  function getWorker() {
+    if (!worker) {
+      const blob = new Blob([WORKER_CODE], { type: 'text/javascript' });
+      worker = new Worker(URL.createObjectURL(blob), { type: 'module' });
+    }
+    return worker;
+  }
+
+  function transcribeInWorker(audio, modelId, language, onProgress) {
+    return new Promise((resolve, reject) => {
+      const w = getWorker();
+      const handleMessage = (e) => {
+        const msg = e.data;
+        if (msg.type === 'progress') {
+          onProgress(msg.data);
+        } else if (msg.type === 'result') {
+          w.removeEventListener('message', handleMessage);
+          resolve(msg.text);
+        } else if (msg.type === 'error') {
+          w.removeEventListener('message', handleMessage);
+          reject(new Error(msg.message));
+        }
+      };
+      w.addEventListener('message', handleMessage);
+      w.postMessage({ audio, modelId, language }, [audio.buffer]);
+    });
+  }
 
   const startBtn = document.getElementById('startBtn');
   const statusEl = document.getElementById('status');
@@ -227,8 +286,6 @@
   const notesText = document.getElementById('notesText');
   const copyNotesBtn = document.getElementById('copyNotesBtn');
   const downloadNotesBtn = document.getElementById('downloadNotesBtn');
-
-  let transcriberCache = {};
 
   function setStatus(text, kind) {
     statusEl.textContent = text;
@@ -310,27 +367,18 @@
     return mono;
   }
 
-  async function getTranscriber(modelId) {
-    if (transcriberCache[modelId]) return transcriberCache[modelId];
-
-    const loaded = {}; // file -> {loaded, total}
-    const progress_callback = (data) => {
-      if (data.status === 'progress' && data.file) {
-        loaded[data.file] = { loaded: data.loaded || 0, total: data.total || 1 };
-        let sumLoaded = 0, sumTotal = 0;
-        for (const k in loaded) { sumLoaded += loaded[k].loaded; sumTotal += loaded[k].total; }
-        const pct = sumTotal > 0 ? (sumLoaded / sumTotal) * 100 : 0;
-        updateProgress(pct);
-        setStatus(`Загвар татаж байна... ${pct.toFixed(0)}%`, '');
-      } else if (data.status === 'ready') {
-        updateProgress(100);
-      }
-    };
-
-    setStatus('Загвар бэлдэж байна...', '');
-    const transcriber = await pipeline('automatic-speech-recognition', modelId, { progress_callback });
-    transcriberCache[modelId] = transcriber;
-    return transcriber;
+  const modelLoadProgress = {}; // file -> {loaded, total}, tracked per model-load
+  function handleWorkerProgress(data) {
+    if (data.status === 'progress' && data.file) {
+      modelLoadProgress[data.file] = { loaded: data.loaded || 0, total: data.total || 1 };
+      let sumLoaded = 0, sumTotal = 0;
+      for (const k in modelLoadProgress) { sumLoaded += modelLoadProgress[k].loaded; sumTotal += modelLoadProgress[k].total; }
+      const pct = sumTotal > 0 ? (sumLoaded / sumTotal) * 100 : 0;
+      updateProgress(pct);
+      setStatus(`Загвар татаж байна... ${pct.toFixed(0)}%`, '');
+    } else if (data.status === 'ready' || data.status === 'done') {
+      updateProgress(100);
+    }
   }
 
   startBtn.addEventListener('click', async () => {
@@ -345,22 +393,15 @@
     resultCard.style.display = 'none';
     notesCard.style.display = 'none';
     try {
-      const transcriber = await getTranscriber(modelId);
-
       setStatus('Аудиог уншиж, дуу чимээг тохируулж байна...', '');
       const audioData = await loadNormalizedAudio(file);
 
-      setStatus('Транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
+      setStatus('Загвар бэлдэж, транскрипц хийж байна... (урт аудио дээр хэдэн минут болно)', '');
       updateProgress(null);
 
-      const output = await transcriber(audioData, {
-        language: 'mongolian',
-        task: 'transcribe',
-        chunk_length_s: 30,
-        stride_length_s: 5,
-      });
+      const text = await transcribeInWorker(audioData, modelId, 'mongolian', handleWorkerProgress);
 
-      const rawText = (output.text || '').trim();
+      const rawText = (text || '').trim();
       const cleaned = cleanupRepetitions(rawText);
 
       resultText.value = cleaned;
