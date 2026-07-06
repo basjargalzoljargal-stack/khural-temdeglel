@@ -220,28 +220,31 @@
       </div>
     </div>
 
-    <details class="advanced">
-      <summary>Админ панель (зөвхөн эрх бүхий хүнд)</summary>
-      <div class="card">
-        <label for="adminKeyInput">Admin key</label>
-        <input type="password" id="adminKeyInput" placeholder="admin key">
-        <div style="height:12px;"></div>
-        <div class="row">
-          <div>
-            <label for="newUsername">Шинэ ажилтны нэвтрэх нэр</label>
-            <input type="text" id="newUsername" placeholder="нэвтрэх нэр">
-          </div>
-          <div>
-            <label for="newPassword">Шинэ ажилтны нууц үг</label>
-            <input type="password" id="newPassword" placeholder="нууц үг (6+ тэмдэгт)">
-          </div>
-        </div>
-        <button class="small" id="createUserBtn">Ажилтан нэмэх</button>
-        <button class="small secondary" id="listUsersBtn">Ажилтнуудыг жагсаах</button>
-        <div id="adminStatus"></div>
-      </div>
-    </details>
   </div>
+
+  <!-- Админ панель: нэвтрэх эсэхээс үл хамааран үргэлж хандах боломжтой,
+       учир нь анхны хэрэглэгчийг бүртгэхэд нэвтэрсэн байх шаардлагагүй. -->
+  <details class="advanced">
+    <summary>Админ панель (зөвхөн эрх бүхий хүнд)</summary>
+    <div class="card">
+      <label for="adminKeyInput">Admin key</label>
+      <input type="password" id="adminKeyInput" placeholder="admin key">
+      <div style="height:12px;"></div>
+      <div class="row">
+        <div>
+          <label for="newUsername">Шинэ ажилтны нэвтрэх нэр</label>
+          <input type="text" id="newUsername" placeholder="нэвтрэх нэр">
+        </div>
+        <div>
+          <label for="newPassword">Шинэ ажилтны нууц үг</label>
+          <input type="password" id="newPassword" placeholder="нууц үг (6+ тэмдэгт)">
+        </div>
+      </div>
+      <button class="small" id="createUserBtn">Ажилтан нэмэх</button>
+      <button class="small secondary" id="listUsersBtn">Ажилтнуудыг жагсаах</button>
+      <div id="adminStatus"></div>
+    </div>
+  </details>
 
 </div>
 
@@ -564,14 +567,4 @@
       adminStatus.textContent = data.users.length
         ? 'Ажилтнууд: ' + data.users.join(', ')
         : 'Одоогоор ажилтан бүртгэгдээгүй байна.';
-      adminStatus.className = 'ok';
-    } catch (err) {
-      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
-      adminStatus.className = 'warn';
-    } finally {
-      listUsersBtn.disabled = false;
-    }
-  });
-</script>
-</body>
-</html>
+      adminStatus.className = 'ok
