@@ -220,12 +220,43 @@
       </div>
     </div>
 
+    <!-- Зөвхөн admin хэрэглэгчээр нэвтэрсэн үед л харагдана (доорх скрипт удирддаг) -->
+    <details class="advanced" id="adminSection" style="display:none;">
+      <summary>Админ тохиргоо</summary>
+      <div class="card">
+        <label for="adminKeyInput">Admin key</label>
+        <input type="password" id="adminKeyInput" placeholder="admin key" autocomplete="off">
+        <div style="height:12px;"></div>
+        <div class="row">
+          <div>
+            <label for="newUsername">Ажилтны нэвтрэх нэр</label>
+            <input type="text" id="newUsername" placeholder="нэвтрэх нэр">
+          </div>
+          <div>
+            <label for="newPassword">Ажилтны нууц үг</label>
+            <input type="password" id="newPassword" placeholder="нууц үг (6+ тэмдэгт)">
+          </div>
+        </div>
+        <button class="small" id="createUserBtn">Нэмэх / нууц үг солих</button>
+        <button class="small secondary" id="listUsersBtn">Жагсаах</button>
+        <div class="row" style="margin-top:14px;">
+          <div>
+            <label for="deleteUsername">Хасах нэвтрэх нэр</label>
+            <input type="text" id="deleteUsername" placeholder="нэвтрэх нэр">
+          </div>
+        </div>
+        <button class="small" style="background:#c0392b;" id="deleteUserBtn">Хасах</button>
+        <div id="adminStatus"></div>
+      </div>
+    </details>
+
   </div>
 
 </div>
 
 <script>
   const WORKER_URL = 'https://khural-backend.basjargalzoljargal.workers.dev';
+  const ADMIN_USERNAME = 'zoljargal'; // зөвхөн энэ нэрээр нэвтэрсэн үед админ тохиргоо харагдана
 
   // ---------- Session helpers ----------
   function saveSession(token, username) {
@@ -247,11 +278,13 @@
   const loginStatus = document.getElementById('loginStatus');
   const whoAmI = document.getElementById('whoAmI');
   const logoutLink = document.getElementById('logoutLink');
+  const adminSection = document.getElementById('adminSection');
 
   function showApp() {
     loginView.style.display = 'none';
     appView.style.display = 'block';
     whoAmI.textContent = getUsername() || '';
+    adminSection.style.display = (getUsername() === ADMIN_USERNAME) ? 'block' : 'none';
   }
   function showLogin(message) {
     clearSession();
@@ -482,6 +515,107 @@
     a.download = 'khural_temdeglel_zohison.txt';
     a.click();
     URL.revokeObjectURL(url);
+  });
+
+  // ---------- Admin тохиргоо (зөвхөн ADMIN_USERNAME-ээр нэвтэрсэн үед харагдана) ----------
+  const adminKeyInput = document.getElementById('adminKeyInput');
+  const newUsername = document.getElementById('newUsername');
+  const newPassword = document.getElementById('newPassword');
+  const createUserBtn = document.getElementById('createUserBtn');
+  const listUsersBtn = document.getElementById('listUsersBtn');
+  const deleteUsername = document.getElementById('deleteUsername');
+  const deleteUserBtn = document.getElementById('deleteUserBtn');
+  const adminStatus = document.getElementById('adminStatus');
+
+  createUserBtn.addEventListener('click', async () => {
+    const adminKey = adminKeyInput.value.trim();
+    const username = newUsername.value.trim();
+    const password = newPassword.value;
+    if (!adminKey || !username || !password) {
+      adminStatus.textContent = 'Admin key, нэвтрэх нэр, нууц үг бүгдийг оруулна уу.';
+      adminStatus.className = 'warn';
+      return;
+    }
+    createUserBtn.disabled = true;
+    adminStatus.textContent = 'Хадгалж байна...';
+    adminStatus.className = '';
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/admin/create-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Алдаа гарлаа');
+      adminStatus.textContent = `"${data.username}" амжилттай хадгалагдлаа.`;
+      adminStatus.className = 'ok';
+      newUsername.value = '';
+      newPassword.value = '';
+    } catch (err) {
+      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
+      adminStatus.className = 'warn';
+    } finally {
+      createUserBtn.disabled = false;
+    }
+  });
+
+  listUsersBtn.addEventListener('click', async () => {
+    const adminKey = adminKeyInput.value.trim();
+    if (!adminKey) {
+      adminStatus.textContent = 'Admin key оруулна уу.';
+      adminStatus.className = 'warn';
+      return;
+    }
+    listUsersBtn.disabled = true;
+    adminStatus.textContent = 'Уншиж байна...';
+    adminStatus.className = '';
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/admin/list-users`, {
+        headers: { 'x-admin-key': adminKey },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Алдаа гарлаа');
+      adminStatus.textContent = data.users.length
+        ? 'Ажилтнууд: ' + data.users.join(', ')
+        : 'Одоогоор ажилтан бүртгэгдээгүй байна.';
+      adminStatus.className = 'ok';
+    } catch (err) {
+      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
+      adminStatus.className = 'warn';
+    } finally {
+      listUsersBtn.disabled = false;
+    }
+  });
+
+  deleteUserBtn.addEventListener('click', async () => {
+    const adminKey = adminKeyInput.value.trim();
+    const username = deleteUsername.value.trim();
+    if (!adminKey || !username) {
+      adminStatus.textContent = 'Admin key болон хасах нэрийг оруулна уу.';
+      adminStatus.className = 'warn';
+      return;
+    }
+    if (!confirm(`"${username}" хэрэглэгчийг устгах уу?`)) return;
+    deleteUserBtn.disabled = true;
+    adminStatus.textContent = 'Устгаж байна...';
+    adminStatus.className = '';
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/admin/delete-user`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ username }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Алдаа гарлаа');
+      adminStatus.textContent = `"${username}" устгагдлаа.`;
+      adminStatus.className = 'ok';
+      deleteUsername.value = '';
+    } catch (err) {
+      adminStatus.textContent = 'Алдаа: ' + (err.message || err);
+      adminStatus.className = 'warn';
+    } finally {
+      deleteUserBtn.disabled = false;
+    }
   });
 </script>
 </body>
