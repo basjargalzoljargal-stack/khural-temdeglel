@@ -196,6 +196,7 @@
       <input type="file" id="audioFile" accept="audio/*,video/mp4,video/webm">
 
       <button id="startBtn">Транскрипц хийж эхлэх</button>
+      <button class="secondary small" id="geminiTestBtn" style="display:none; margin-left:8px;">🧪 Gemini-ээр турших (зөвхөн админ)</button>
       <div class="progress-bar" id="progressBar"><div id="progressFill"></div></div>
       <div id="status">Бэлэн байна.</div>
     </div>
@@ -279,12 +280,15 @@
   const whoAmI = document.getElementById('whoAmI');
   const logoutLink = document.getElementById('logoutLink');
   const adminSection = document.getElementById('adminSection');
+  const geminiTestBtn = document.getElementById('geminiTestBtn');
 
   function showApp() {
     loginView.style.display = 'none';
     appView.style.display = 'block';
     whoAmI.textContent = getUsername() || '';
-    adminSection.style.display = (getUsername() === ADMIN_USERNAME) ? 'block' : 'none';
+    const isAdmin = getUsername() === ADMIN_USERNAME;
+    adminSection.style.display = isAdmin ? 'block' : 'none';
+    geminiTestBtn.style.display = isAdmin ? 'inline-block' : 'none';
   }
   function showLogin(message) {
     clearSession();
@@ -447,6 +451,43 @@
       setStatus('Алдаа гарлаа: ' + (err.message || err), 'warn');
     } finally {
       startBtn.disabled = false;
+    }
+  });
+
+  geminiTestBtn.addEventListener('click', async () => {
+    const file = audioFile.files[0];
+    if (!file) {
+      setStatus('Эхлээд аудио файл сонгоно уу.', 'warn');
+      return;
+    }
+
+    geminiTestBtn.disabled = true;
+    resultCard.style.display = 'none';
+    notesCard.style.display = 'none';
+    try {
+      setStatus('(Gemini) Аудиог илгээж, транскрипц хийж байна...', '');
+      updateProgress(null);
+
+      const formData = new FormData();
+      formData.append('audio', file, file.name || 'audio.webm');
+
+      const resp = await authedFetch('/api/transcribe-gemini', { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Транскрипц хийхэд алдаа гарлаа');
+
+      const rawText = (data.text || '').trim();
+      resultText.value = rawText;
+      resultCard.style.display = 'block';
+      notesCard.style.display = 'block';
+      qualityHint.textContent = '(Энэ бол Gemini-ээр хийсэн туршилтын транскрипц)';
+
+      setStatus('(Gemini) Дууслаа.', 'ok');
+    } catch (err) {
+      console.error(err);
+      setStatus('Алдаа гарлаа: ' + (err.message || err), 'warn');
+    } finally {
+      geminiTestBtn.disabled = false;
+      updateProgress(null);
     }
   });
 
